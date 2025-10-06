@@ -20,7 +20,7 @@ car_img = pygame.transform.rotozoom(car_img, 0, 0.4)
 car_w, car_h = car_img.get_size()
 mass = 8
 collision_h = car_h * 0.55
-moment = pymunk.moment_for_box(mass, (car_w, collision_h))
+moment = pymunk.moment_for_box(mass, (car_w, collision_h)) * 1.3  # stable but nimble
 car_body = pymunk.Body(mass, moment)
 car_body.position = (200, 150)
 car_shape = pymunk.Poly.create_box(car_body, (car_w, collision_h), radius=14)
@@ -46,7 +46,6 @@ def add_track_point(x):
         seg.elasticity = 0.1
         space.add(seg)
 
-# Initialize track
 for _ in range(buffer_ahead // track_step):
     add_track_point(track_x)
     track_x += track_step
@@ -55,10 +54,14 @@ for _ in range(buffer_ahead // track_step):
 font = pygame.font.SysFont(None,28)
 flip_timer = 0
 speed_limit = 2000
-accel_force = 9500
-boost_force = 14000
+accel_force = 5000
+boost_force = 600
 distance_traveled = 0
 PPM = 30  # pixels per meter
+
+# ===== CAMERA SMOOTHING =====
+cam_x, cam_y = 0, 0
+cam_smooth = 0.1  # lower = snappier, higher = smoother
 
 # ===== MAIN LOOP =====
 running = True
@@ -70,24 +73,28 @@ while running:
 
     keys = pygame.key.get_pressed()
     on_ground = bool(space.shape_query(car_shape))
-    vx = car_body.velocity.x
+    vx, vy = car_body.velocity
 
     # ----- DRIVING -----
     if on_ground:
-        if keys[pygame.K_d] and abs(vx) < speed_limit:
+        if keys[pygame.K_d] and vx < speed_limit:
             car_body.apply_force_at_local_point((accel_force,0))
             car_body.apply_force_at_local_point((boost_force*dt*60,0))
-        if keys[pygame.K_a] and abs(vx) < speed_limit:
+        if keys[pygame.K_a] and vx > -speed_limit:
             car_body.apply_force_at_local_point((-accel_force,0))
             car_body.apply_force_at_local_point((-boost_force*dt*60,0))
     else:
-        torque_air = 140000
-        if keys[pygame.K_a]: car_body.torque += torque_air
-        if keys[pygame.K_d]: car_body.torque -= torque_air
+        # Air control ramps with speed
+        torque_air_base = 60000
+        torque_air_mult = min(1.0, abs(vx)/300)
+        if keys[pygame.K_a]:
+            car_body.torque += torque_air_base * torque_air_mult * dt * 60
+        if keys[pygame.K_d]:
+            car_body.torque -= torque_air_base * torque_air_mult * dt * 60
 
     # Cap upward velocity
     if car_body.velocity.y < -900:
-        car_body.velocity = (car_body.velocity.x,-900)
+        car_body.velocity = (car_body.velocity.x, -900)
 
     # Auto-upright
     ang = abs(math.degrees(car_body.angle)%360)
@@ -96,7 +103,7 @@ while running:
         if flip_timer > 2:
             car_body.angle = 0
             car_body.angular_velocity = 0
-            car_body.position = (car_body.position.x, car_body.position.y+5)
+            car_body.position = (car_body.position.x, car_body.position.y + 5)
             flip_timer = 0
     else:
         flip_timer = 0
@@ -112,18 +119,19 @@ while running:
     while track_pts and track_pts[1][0] < car_body.position.x - buffer_behind:
         track_pts.pop(0)
 
-    # ----- CAMERA -----
-    cam_x = max(0,int(car_body.position.x - WIDTH//2))
-    cam_y = 0
+    # ----- CAMERA (Smooth Follow) -----
+    target_cam_x = int(car_body.position.x - WIDTH//2)
+    target_cam_y = int(car_body.position.y - HEIGHT//2)
+    cam_x += (target_cam_x - cam_x) * cam_smooth
+    cam_y += (target_cam_y - cam_y) * cam_smooth
 
     # Fill sky
-    screen.fill((135,206,235))  # sky blue
+    screen.fill((135,206,235))
 
-    # Draw terrain (dirt & grass)
+    # Draw terrain
     for i in range(len(track_pts)-1):
         x1, y1 = track_pts[i]
         x2, y2 = track_pts[i+1]
-        # Only draw if on screen
         if x2 < cam_x: continue
         if x1 - cam_x > WIDTH: break
 
@@ -132,7 +140,7 @@ while running:
                     (x2 - cam_x, y2 - cam_y), (x2 - cam_x, HEIGHT)]
         pygame.draw.polygon(screen, (139,69,19), poly_pts)
 
-        # Grass strip: use exact same y as dirt
+        # Grass strip
         dx, dy = x2-x1, y2-y1
         seg_len = max(1, math.hypot(dx, dy))
         angle = math.degrees(math.atan2(-dy, dx))
@@ -146,7 +154,7 @@ while running:
     screen.blit(rotated, rect)
 
     # ----- SPEED & DISTANCE -----
-    distance_traveled += vx / PPM * dt  # meters
+    distance_traveled += vx / PPM * dt
     speed_mps = vx / PPM
     speed_kmh = speed_mps * 3.6
     dist_text = font.render(f"Distance: {int(distance_traveled)} m", True, (0,0,0))
