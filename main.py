@@ -101,12 +101,12 @@ while running:
         if keys[pygame.K_a] and vx > -speed_limit:
             car_body.apply_force_at_local_point((-accel_force, 0))
     else:
-        torque_air_base = 65000
+        torque_air_base = 125000
         torque_air_mult = min(1.0, abs(vx) / 250)
         if keys[pygame.K_a]:
-            car_body.torque += torque_air_base * torque_air_mult * dt * 60
+            car_body.torque += torque_air_base * dt * 60
         if keys[pygame.K_d]:
-            car_body.torque -= torque_air_base * torque_air_mult * dt * 60
+            car_body.torque -= torque_air_base * dt * 60
 
     # Cap upward velocity
     if car_body.velocity.y < -900:
