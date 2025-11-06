@@ -6,6 +6,71 @@ WIDTH, HEIGHT = screen.get_size()
 clock = pygame.time.Clock()
 pygame.display.set_caption("Pyhill")
 
+
+def reset_game_state():
+    global space, track_pts, track_x, coins, gas_cans, next_coin_x
+    global fuel, distance_traveled, coin_score, game_time
+    global out_of_gas_time, upside_down_start, engine_disabled
+    global cam_x, cam_y, y_base, amp1, amp2, freq1, freq2, buffer_ahead, buffer_behind
+    global coin_spacing_min, coin_spacing_max, min_gas_distance, smart_spawn_distance
+
+    # ===== PHYSICS =====
+    space = pymunk.Space()
+    space.gravity = (0, 500)
+
+    # ===== TRACK =====
+    track_pts = []
+    track_step = 30
+    track_x = 0
+    buffer_ahead = 6000
+    buffer_behind = 2000
+    y_base = 450
+    amp1, amp2 = 160, 70
+    freq1, freq2 = 0.0016, 0.004
+
+    def track_y(x):
+        return y_base + amp1 * math.sin(x * freq1) + amp2 * math.sin(x * freq2)
+
+    globals()["track_y"] = track_y  # rebind function globally for reuse
+
+    def add_track_point(x):
+        y = track_y(x)
+        track_pts.append((x, y))
+        if len(track_pts) > 1:
+            seg = pymunk.Segment(space.static_body, track_pts[-2], track_pts[-1], 4)
+            seg.friction = 1.0
+            seg.elasticity = 0.1
+            space.add(seg)
+
+    globals()["add_track_point"] = add_track_point
+
+    for _ in range(buffer_ahead // track_step):
+        add_track_point(track_x)
+        track_x += track_step
+
+    # ===== COINS & GAS =====
+    coins = []
+    gas_cans = []
+    coin_spacing_min = 1000
+    coin_spacing_max = 1600
+    next_coin_x = 800
+    gas_radius = 20
+
+    # ===== GAME STATS =====
+    game_time = 0
+    fuel = 100
+    distance_traveled = 0
+    coin_score = 0
+    out_of_gas_time = None
+    upside_down_start = None
+    engine_disabled = False
+
+    # ===== CAMERA =====
+    cam_x, cam_y = 0, 0
+    smart_spawn_distance = 1000
+    min_gas_distance = 2500
+
+
 # ===== PHYSICS =====
 space = pymunk.Space()
 space.gravity = (0, 500)
@@ -217,6 +282,7 @@ def main_menu():
                 sys.exit()
             if e.type == pygame.KEYDOWN:
                 if e.key in (pygame.K_RETURN, pygame.K_SPACE):
+                    pygame.event.clear()
                     waiting = False
             if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
                 clicked = True
@@ -257,6 +323,53 @@ def main_menu():
         ):
             pygame.quit()
             sys.exit()
+
+        pygame.display.flip()
+        clock.tick(30)
+
+
+def confirm_exit_menu():
+    small_font = pygame.font.SysFont("Rajdhani", 64, True)
+    button_font = pygame.font.SysFont("Rajdhani", 48, True)
+
+    yes_rect = pygame.Rect(WIDTH // 2 - 220, HEIGHT // 2, 180, 80)
+    no_rect = pygame.Rect(WIDTH // 2 + 40, HEIGHT // 2, 180, 80)
+
+    while True:
+        screen.fill((20, 20, 20))
+        prompt = small_font.render("Return to Main Menu?", True, (255, 255, 255))
+        screen.blit(prompt, (WIDTH // 2 - prompt.get_width() // 2, HEIGHT // 3))
+
+        mx, my = pygame.mouse.get_pos()
+        clicked = False
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if e.type == pygame.KEYDOWN:
+                if e.key == pygame.K_ESCAPE:
+                    return False
+            if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                clicked = True
+
+        def draw_button(rect, text, base_col, hover_col):
+            hovered = rect.collidepoint(mx, my)
+            color = hover_col if hovered else base_col
+            pygame.draw.rect(screen, color, rect, border_radius=12)
+            label = button_font.render(text, True, (0, 0, 0))
+            screen.blit(
+                label,
+                (
+                    rect.centerx - label.get_width() // 2,
+                    rect.centery - label.get_height() // 2,
+                ),
+            )
+            return hovered
+
+        if draw_button(yes_rect, "YES", (255, 100, 100), (255, 150, 150)) and clicked:
+            return True
+        if draw_button(no_rect, "NO", (120, 255, 120), (160, 255, 160)) and clicked:
+            return False
 
         pygame.display.flip()
         clock.tick(30)
@@ -305,6 +418,7 @@ def show_game_over(reason_text):
 
 # ===== GAME LOOP =====
 def game_loop():
+    reset_game_state()
     global \
         fuel, \
         distance_traveled, \
@@ -327,7 +441,10 @@ def game_loop():
             if e.type == pygame.QUIT:
                 running = False
             if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
-                running = False
+                paused = True
+                if confirm_exit_menu():
+                    return
+                paused = False
 
         keys = pygame.key.get_pressed()
         on_ground = bool(space.shape_query(car_shape))
@@ -528,5 +645,6 @@ def game_loop():
 
 # ===== RUN =====
 if __name__ == "__main__":
-    main_menu()
-    game_loop()
+    while True:
+        main_menu()
+        game_loop()
