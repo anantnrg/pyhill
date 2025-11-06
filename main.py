@@ -77,10 +77,10 @@ gas_refill_amount = 100
 game_time = 0
 last_spawn_x = 0
 
-font = pygame.font.SysFont(None, 28)
+font = pygame.font.SysFont("Rajdhani", 36, True)
 flip_timer = 0
-speed_limit = 8000
-accel_force = 9000
+speed_limit = 12000
+accel_force = 11000
 distance_traveled = 0
 PPM = 30
 cam_x, cam_y = 0, 0
@@ -89,11 +89,13 @@ coin_score = 0
 fuel = 100
 fuel_deplete_rate = 0.05
 fuel_accel_drain = 0.2
-fuel_bar_width = 200
+fuel_bar_width = 400
 out_of_gas_time = None
 low_fuel_threshold = 30
 smart_spawn_distance = 1000
-min_gas_distance = 1500
+min_gas_distance = 2500
+upside_down_start = None
+engine_disabled = False
 
 
 def spawn_coin_group(x_start):
@@ -132,14 +134,25 @@ def car_selection_menu():
                 sys.exit()
             if e.type == pygame.KEYDOWN:
                 if e.key == pygame.K_ESCAPE:
-                    pygame.quit()
-                    sys.exit()
+                    return  # back to main menu
                 elif e.key == pygame.K_LEFT:
                     selected_car_index = (selected_car_index - 1) % len(car_images)
                 elif e.key == pygame.K_RIGHT:
                     selected_car_index = (selected_car_index + 1) % len(car_images)
                 elif e.key == pygame.K_SPACE:
                     waiting = False
+            if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                mx, my = e.pos
+                for i, img in enumerate(car_images):
+                    rect = pygame.Rect(
+                        WIDTH // 2 + (i - selected_car_index) * 300 - 100,
+                        HEIGHT // 2 - 100,
+                        200,
+                        200,
+                    )
+                    if rect.collidepoint(mx, my):
+                        selected_car_index = i
+                        waiting = False
 
         # draw title
         screen.blit(title_text, (WIDTH // 2 - title_text.get_width() // 2, HEIGHT // 6))
@@ -183,6 +196,7 @@ def main_menu():
     score_btn_rect = pygame.Rect(
         WIDTH // 2 - button_w // 2, HEIGHT // 2 + 120, button_w, button_h
     )
+    exit_btn_rect = pygame.Rect(40, HEIGHT - 100, 220, 70)
 
     waiting = True
     while waiting:
@@ -202,9 +216,6 @@ def main_menu():
                 pygame.quit()
                 sys.exit()
             if e.type == pygame.KEYDOWN:
-                if e.key == pygame.K_ESCAPE:
-                    pygame.quit()
-                    sys.exit()
                 if e.key in (pygame.K_RETURN, pygame.K_SPACE):
                     waiting = False
             if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
@@ -240,13 +251,69 @@ def main_menu():
         ):
             print("High scores screen placeholder!")  # can make later
 
+        if (
+            draw_button(exit_btn_rect, "EXIT", (180, 80, 80), (255, 100, 100))
+            and clicked
+        ):
+            pygame.quit()
+            sys.exit()
+
         pygame.display.flip()
         clock.tick(30)
 
 
+def show_game_over(reason_text):
+    small_font = pygame.font.SysFont("Rajdhani", 64, True)
+    button_font = pygame.font.SysFont("Rajdhani", 48, True)
+    btn_rect = pygame.Rect(WIDTH - 300, HEIGHT - 120, 260, 80)
+
+    waiting = True
+    while waiting:
+        screen.fill((10, 10, 10))
+        reason = small_font.render(reason_text, True, (255, 60, 60))
+        info = button_font.render("Press ESC or click RETURN", True, (255, 255, 255))
+
+        screen.blit(reason, (WIDTH // 2 - reason.get_width() // 2, HEIGHT // 3))
+        pygame.draw.rect(screen, (255, 50, 50), btn_rect, border_radius=12)
+        label = button_font.render("RETURN", True, (0, 0, 0))
+        screen.blit(
+            label,
+            (
+                btn_rect.centerx - label.get_width() // 2,
+                btn_rect.centery - label.get_height() // 2,
+            ),
+        )
+        screen.blit(info, (WIDTH // 2 - info.get_width() // 2, HEIGHT // 2 + 100))
+
+        pygame.display.flip()
+
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                waiting = False
+            if (
+                e.type == pygame.MOUSEBUTTONDOWN
+                and e.button == 1
+                and btn_rect.collidepoint(e.pos)
+            ):
+                waiting = False
+        clock.tick(30)
+    main_menu()
+
+
 # ===== GAME LOOP =====
 def game_loop():
-    global fuel, distance_traveled, coin_score, game_time, out_of_gas_time, track_x
+    global \
+        fuel, \
+        distance_traveled, \
+        coin_score, \
+        game_time, \
+        out_of_gas_time, \
+        track_x, \
+        engine_disabled, \
+        upside_down_start
 
     selected_car_img = car_images[selected_car_index]
     car_img, car_body, car_shape, car_w, car_h = create_car(selected_car_img)
@@ -272,28 +339,43 @@ def game_loop():
 
         # DRIVE
         if not out_of_fuel:
-            if on_ground:
-                if (keys[pygame.K_d] or keys[pygame.K_RIGHT]) and vx < speed_limit:
-                    car_body.apply_force_at_local_point((accel_force, 0))
-                    fuel -= fuel_accel_drain
-                if (keys[pygame.K_a] or keys[pygame.K_LEFT]) and vx > -speed_limit:
-                    car_body.apply_force_at_local_point((-accel_force, 0))
-                    fuel -= fuel_accel_drain
+            angle_deg = math.degrees(car_body.angle) % 360
+            angular_speed = abs(car_body.angular_velocity)
+            vel_mag = (car_body.velocity[0] ** 2 + car_body.velocity[1] ** 2) ** 0.5
+
+            if 170 < angle_deg < 190:
+                engine_disabled = True
+
+            # check if mostly upside down (170–190°)
+            if 170 < angle_deg < 190 and vel_mag < 10 and angular_speed < 1:
+                if upside_down_start is None:
+                    upside_down_start = game_time
+                elif game_time - upside_down_start > 5:
+                    # Only after 5 seconds of being still
+                    show_game_over("You Flipped! Game Over!")
+                    return
             else:
-                torque_air_base = 125000
+                upside_down_start = None  # reset timer if moved or recovered
+
+            if on_ground:
+                if not engine_disabled:
+                    if (keys[pygame.K_d] or keys[pygame.K_RIGHT]) and vx < speed_limit:
+                        car_body.apply_force_at_local_point((accel_force, 0))
+                        fuel -= fuel_accel_drain
+                    if (keys[pygame.K_a] or keys[pygame.K_LEFT]) and vx > -speed_limit:
+                        car_body.apply_force_at_local_point((-accel_force, 0))
+                        fuel -= fuel_accel_drain
+            else:
+                angular_impulse = 0.15  # tweak for sensitivity
                 if keys[pygame.K_a] or keys[pygame.K_LEFT]:
-                    car_body.torque += torque_air_base * dt * 60
+                    car_body.angular_velocity += angular_impulse
                 if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-                    car_body.torque -= torque_air_base * dt * 60
+                    car_body.angular_velocity -= angular_impulse
             fuel -= fuel_deplete_rate
         else:
-            if game_time - out_of_gas_time > 20:
-                screen.fill((20, 20, 20))
-                text = font.render("Out of Gas, Game Over!", True, (255, 50, 50))
-                screen.blit(text, (WIDTH // 2 - 180, HEIGHT // 2))
-                pygame.display.flip()
-                pygame.time.wait(3000)
-                break
+            if game_time - out_of_gas_time > 5:
+                show_game_over("Out of Gas, Game Over!")
+                return
 
         fuel = max(0, fuel)
 
@@ -432,11 +514,11 @@ def game_loop():
         screen.blit(coin_text, (WIDTH - 250, 60))
         screen.blit(fps_text, (10, 10))
 
-        pygame.draw.rect(screen, (0, 0, 0), (30, HEIGHT - 40, fuel_bar_width + 4, 24))
+        pygame.draw.rect(screen, (0, 0, 0), (50, HEIGHT - 70, fuel_bar_width + 4, 36))
         pygame.draw.rect(
             screen,
             (255, 50, 50),
-            (32, HEIGHT - 38, int((fuel / 100) * fuel_bar_width), 20),
+            (52, HEIGHT - 68, int((fuel / 100) * fuel_bar_width), 32),
         )
 
         pygame.display.flip()
