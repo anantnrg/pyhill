@@ -484,9 +484,11 @@ def game_loop():
             else:
                 angular_impulse = 0.15  # tweak for sensitivity
                 if keys[pygame.K_a] or keys[pygame.K_LEFT]:
-                    car_body.angular_velocity += angular_impulse
+                    if car_body.angular_velocity <= 5:
+                        car_body.angular_velocity += angular_impulse
                 if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-                    car_body.angular_velocity -= angular_impulse
+                    if car_body.angular_velocity >= -5:
+                        car_body.angular_velocity -= angular_impulse
             fuel -= fuel_deplete_rate
         else:
             if game_time - out_of_gas_time > 5:
