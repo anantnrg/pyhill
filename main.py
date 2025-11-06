@@ -167,31 +167,31 @@ def car_selection_menu():
 
 # ===== MAIN MENU =====
 def main_menu():
-    menu_font = pygame.font.SysFont(None, 100)
-    small_font = pygame.font.SysFont(None, 40)
+    menu_font = pygame.font.SysFont("Rajdhani", 256, True)
+    small_font = pygame.font.SysFont("Rajdhani", 64, True)
 
     title_text = menu_font.render("PYHILL", True, (255, 215, 0))
 
     # button setup
-    button_w, button_h = 260, 70
+    button_w, button_h = 420, 120
     start_btn_rect = pygame.Rect(
         WIDTH - button_w - 60, HEIGHT - button_h - 60, button_w, button_h
     )
     car_btn_rect = pygame.Rect(
-        WIDTH // 2 - button_w // 2, HEIGHT // 2 - 20, button_w, button_h
+        WIDTH // 2 - button_w // 2, HEIGHT // 2 - 40, button_w, button_h
     )
     score_btn_rect = pygame.Rect(
-        WIDTH // 2 - button_w // 2, HEIGHT // 2 + 80, button_w, button_h
+        WIDTH // 2 - button_w // 2, HEIGHT // 2 + 120, button_w, button_h
     )
 
     waiting = True
     while waiting:
         screen.fill((20, 20, 30))
-        wave = math.sin(pygame.time.get_ticks() * 0.002) * 10
+        wave = math.sin(pygame.time.get_ticks() * 0.002) * 30
 
         # title
         screen.blit(
-            title_text, (WIDTH // 2 - title_text.get_width() // 2, HEIGHT // 4 + wave)
+            title_text, (WIDTH // 2 - title_text.get_width() // 2, HEIGHT // 8 + wave)
         )
 
         mx, my = pygame.mouse.get_pos()
