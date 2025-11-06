@@ -343,11 +343,10 @@ def game_loop():
             angular_speed = abs(car_body.angular_velocity)
             vel_mag = (car_body.velocity[0] ** 2 + car_body.velocity[1] ** 2) ** 0.5
 
-            if 170 < angle_deg < 190:
+            if 170 < angle_deg < 190 and angular_speed < 1:
                 engine_disabled = True
-
             # check if mostly upside down (170–190°)
-            if 170 < angle_deg < 190 and vel_mag < 10 and angular_speed < 1:
+            if 170 < angle_deg < 190 and vel_mag < 50 and angular_speed < 1:
                 if upside_down_start is None:
                     upside_down_start = game_time
                 elif game_time - upside_down_start > 5:
