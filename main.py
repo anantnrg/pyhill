@@ -1,7 +1,10 @@
 import pygame, pymunk, math, random, sys
 import json, os
+from datetime import datetime
 
-PLAYERS_FILE = "players.json"
+
+PLAYERS_FILE = os.path.join(os.path.expanduser("~"), "pyhill_players.json")
+
 
 pygame.init()
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
@@ -364,7 +367,7 @@ def main_menu():
             )
             and clicked
         ):
-            print("High scores screen placeholder!")
+            leaderboard()
         if (
             draw_button(
                 exit_btn_rect, "EXIT", (180, 80, 80), (255, 100, 100), small_font
@@ -526,6 +529,129 @@ def player_select_menu():
         clock.tick(30)
 
 
+def update_player_stats(player_name, distance, coins, flips):
+    """
+    Update player's max stats and append run (keeps up to 50 runs).
+    """
+    global players
+    if not player_name:
+        return
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    if player_name not in players:
+        players[player_name] = {"Max Distance": 0, "Coins": 0, "Flips": 0, "Runs": []}
+
+    p = players[player_name]
+    # update maxima
+    p["Max Distance"] = max(p.get("Max Distance", 0), int(distance))
+    p["Coins"] = max(p.get("Coins", 0), int(coins))
+    p["Flips"] = max(p.get("Flips", 0), int(flips))
+
+    # add run record to front
+    p.setdefault("Runs", [])
+    p["Runs"].insert(
+        0,
+        {
+            "distance": int(distance),
+            "coins": int(coins),
+            "flips": int(flips),
+            "time": now,
+        },
+    )
+    # keep most recent 50 runs
+    p["Runs"] = p["Runs"][:50]
+    save_players(players)
+
+
+def leaderboard():
+    global players
+    small_font = pygame.font.SysFont("Rajdhani", 56, True)
+    tiny_font = pygame.font.SysFont("Rajdhani", 28, True)
+    waiting = True
+    scroll = 0
+
+    # build global runs list once per open
+    def collect_runs():
+        runs = []
+        for name, stats in players.items():
+            for r in stats.get("Runs", []):
+                runs.append({"player": name, **r})
+        runs.sort(key=lambda x: x["distance"], reverse=True)
+        return runs
+
+    runs = collect_runs()
+
+    while waiting:
+        screen.fill((25, 25, 35))
+        title = small_font.render("HIGH SCORES", True, (255, 215, 0))
+        screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 40))
+
+        # left: per-player bests
+        left_x = WIDTH // 4
+        y = 120
+        header = tiny_font.render(
+            "PLAYER  | MAX DIST | COINS | FLIPS", True, (200, 200, 200)
+        )
+        screen.blit(header, (left_x - header.get_width() // 2, y))
+        y += 40
+        sorted_players = sorted(
+            players.items(), key=lambda p: p[1].get("Max Distance", 0), reverse=True
+        )
+        for name, st in sorted_players[:12]:
+            line = tiny_font.render(
+                f"{name:<12}  {st.get('Max Distance', 0):>6}m    {st.get('Coins', 0):>4}    {st.get('Flips', 0):>4}",
+                True,
+                (255, 255, 255),
+            )
+            screen.blit(line, (left_x - line.get_width() // 2, y))
+            y += 32
+
+        # right: global top runs (scrollable)
+        right_x = WIDTH * 3 // 4
+        y2 = 120
+        header2 = tiny_font.render("TOP RUNS (by distance)", True, (200, 200, 200))
+        screen.blit(header2, (right_x - header2.get_width() // 2, y2))
+        y2 += 40
+        start_index = scroll // 40
+        for run in runs[start_index : start_index + 12]:
+            txt = tiny_font.render(
+                f"{run['player']:<10} {run['distance']:>5}m  {run['coins']:>3}c  {run['flips']:>2}f  {run['time']}",
+                True,
+                (255, 255, 255),
+            )
+            screen.blit(txt, (right_x - txt.get_width() // 2, y2))
+            y2 += 32
+
+        # back button
+        back_rect = pygame.Rect(WIDTH // 2 - 120, HEIGHT - 100, 240, 64)
+        pygame.draw.rect(screen, (220, 120, 120), back_rect, border_radius=12)
+        pygame.draw.rect(screen, (0, 0, 0), back_rect, 3, border_radius=12)
+        back_text = tiny_font.render("BACK", True, (0, 0, 0))
+        screen.blit(
+            back_text,
+            (
+                back_rect.centerx - back_text.get_width() // 2,
+                back_rect.centery - back_text.get_height() // 2,
+            ),
+        )
+
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                waiting = False
+            if e.type == pygame.MOUSEBUTTONDOWN:
+                if e.button == 1:
+                    if back_rect.collidepoint(e.pos):
+                        waiting = False
+                elif e.button == 4:  # wheel up
+                    scroll = max(0, scroll - 40)
+                elif e.button == 5:  # wheel down
+                    scroll += 40
+        pygame.display.flip()
+        clock.tick(30)
+
+
 def confirm_exit_menu():
     small_font = pygame.font.SysFont("Rajdhani", 64, True)
     button_font = pygame.font.SysFont("Rajdhani", 48, True)
@@ -574,6 +700,10 @@ def confirm_exit_menu():
 
 
 def show_game_over(reason_text):
+    global current_player, coin_score, flip_count, distance_traveled
+    if current_player:
+        update_player_stats(current_player, distance_traveled, coin_score, flip_count)
+
     small_font = pygame.font.SysFont("Rajdhani", 64, True)
     button_font = pygame.font.SysFont("Rajdhani", 48, True)
     btn_rect = pygame.Rect(WIDTH - 300, HEIGHT - 120, 260, 80)
