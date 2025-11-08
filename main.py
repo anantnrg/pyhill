@@ -5,6 +5,10 @@ screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 WIDTH, HEIGHT = screen.get_size()
 clock = pygame.time.Clock()
 pygame.display.set_caption("Pyhill")
+coin_icon = pygame.image.load("coin_icon.png").convert_alpha()
+coin_icon = pygame.transform.rotozoom(coin_icon, 0, 2)
+gas_icon = pygame.image.load("gas_icon.png").convert_alpha()
+gas_icon = pygame.transform.rotozoom(gas_icon, 0, 4)
 
 
 def reset_game_state():
@@ -12,7 +16,12 @@ def reset_game_state():
     global fuel, distance_traveled, coin_score, game_time
     global out_of_gas_time, upside_down_start, engine_disabled
     global cam_x, cam_y, y_base, amp1, amp2, freq1, freq2, buffer_ahead, buffer_behind
-    global coin_spacing_min, coin_spacing_max, min_gas_distance, smart_spawn_distance
+    global \
+        coin_spacing_min, \
+        coin_spacing_max, \
+        min_gas_distance, \
+        smart_spawn_distance, \
+        flip_count
 
     # ===== PHYSICS =====
     space = pymunk.Space()
@@ -54,7 +63,6 @@ def reset_game_state():
     coin_spacing_min = 1000
     coin_spacing_max = 1600
     next_coin_x = 800
-    gas_radius = 20
 
     # ===== GAME STATS =====
     game_time = 0
@@ -69,6 +77,7 @@ def reset_game_state():
     cam_x, cam_y = 0, 0
     smart_spawn_distance = 1000
     min_gas_distance = 2500
+    flip_count = 0
 
 
 # ===== PHYSICS =====
@@ -143,6 +152,7 @@ game_time = 0
 last_spawn_x = 0
 
 font = pygame.font.SysFont("Rajdhani", 36, True)
+collect_font = pygame.font.SysFont("Rajdhani", 64, True)
 flip_timer = 0
 speed_limit = 12000
 accel_force = 11000
@@ -161,6 +171,7 @@ smart_spawn_distance = 1000
 min_gas_distance = 2500
 upside_down_start = None
 engine_disabled = False
+flip_count = 0
 
 
 def spawn_coin_group(x_start):
@@ -384,6 +395,14 @@ def show_game_over(reason_text):
     while waiting:
         screen.fill((10, 10, 10))
         reason = small_font.render(reason_text, True, (255, 60, 60))
+        score_info = button_font.render(
+            f"Coins: {coin_score}  |  Flips: {flip_count}  |  Distance: {int(distance_traveled)}m",
+            True,
+            (255, 255, 255),
+        )
+        screen.blit(
+            score_info, (WIDTH // 2 - score_info.get_width() // 2, HEIGHT // 2 - 60)
+        )
         info = button_font.render("Press ESC or click RETURN", True, (255, 255, 255))
 
         screen.blit(reason, (WIDTH // 2 - reason.get_width() // 2, HEIGHT // 3))
@@ -427,10 +446,12 @@ def game_loop():
         out_of_gas_time, \
         track_x, \
         engine_disabled, \
-        upside_down_start
+        upside_down_start, \
+        flip_count
 
     selected_car_img = car_images[selected_car_index]
     car_img, car_body, car_shape, car_w, car_h = create_car(selected_car_img)
+    floating_texts = []
 
     running = True
     while running:
@@ -482,13 +503,51 @@ def game_loop():
                         car_body.apply_force_at_local_point((-accel_force, 0))
                         fuel -= fuel_accel_drain
             else:
+                # IN-AIR: apply player torque, but ALWAYS track rotation delta every frame
                 angular_impulse = 0.15  # tweak for sensitivity
+                # apply instant angular changes (no wind-up)
                 if keys[pygame.K_a] or keys[pygame.K_LEFT]:
                     if car_body.angular_velocity <= 5:
                         car_body.angular_velocity += angular_impulse
                 if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
                     if car_body.angular_velocity >= -5:
                         car_body.angular_velocity -= angular_impulse
+
+                # initialize rotation tracking fields on first airborne frame
+                if not hasattr(car_body, "rot_accum"):
+                    car_body.rot_accum = 0.0
+                    car_body.last_angle = car_body.angle
+
+                # compute angle delta this frame (in degrees) and normalize across wrap
+                current_angle = math.degrees(car_body.angle) % 360
+                last_angle_deg = math.degrees(car_body.last_angle) % 360
+                delta = current_angle - last_angle_deg
+                # normalize to [-180, 180] to handle wrap-around
+                if delta > 180:
+                    delta -= 360
+                elif delta < -180:
+                    delta += 360
+
+                car_body.rot_accum += delta
+
+                # full flip detection (±360° accumulated)
+                if abs(car_body.rot_accum) >= 360.0:
+                    flip_count += 1
+                    coin_score += 1000
+                    car_body.rot_accum = 0.0  # reset for next flip
+                    floating_texts.append(
+                        {
+                            "text": f"+1000 FLIP #{flip_count}!",
+                            "x": car_body.position.x,
+                            "y": car_body.position.y - 60,
+                            "timer": 2.0,
+                            "color": (0, 0, 0),
+                        }
+                    )
+
+                # save current angle for next frame
+                car_body.last_angle = car_body.angle
+
             fuel -= fuel_deplete_rate
         else:
             if game_time - out_of_gas_time > 5:
@@ -530,6 +589,15 @@ def game_loop():
                 dy = coin["y"] - car_body.position.y
                 if dx * dx + dy * dy < (coin_radius + car_w * 0.3) ** 2:
                     coin["collected"] = True
+                    floating_texts.append(
+                        {
+                            "text": "+1",
+                            "x": coin["x"],
+                            "y": coin["y"] - 40,
+                            "timer": 1.0,
+                            "color": (0, 0, 0),
+                        }
+                    )
                     coin_score += 1
         coins[:] = [c for c in coins if c["x"] > car_body.position.x - buffer_behind]
 
@@ -624,20 +692,34 @@ def game_loop():
             f"Distance: {int(distance_traveled)} m", True, (0, 0, 0)
         )
         speed_text = font.render(f"Speed: {int(speed_kmh)} km/h", True, (0, 0, 0))
-        coin_text = font.render(f"Coins: {coin_score}", True, (255, 215, 0))
         fps_text = font.render(f"FPS: {int(clock.get_fps())}", True, (0, 0, 0))
+        coin_text = font.render(f"{coin_score}", True, (255, 215, 0))
 
         screen.blit(dist_text, (WIDTH - 250, 10))
         screen.blit(speed_text, (WIDTH - 250, 35))
-        screen.blit(coin_text, (WIDTH - 250, 60))
+        screen.blit(coin_icon, (WIDTH - 310, 60))
+        screen.blit(coin_text, (WIDTH - 250, 65))
         screen.blit(fps_text, (10, 10))
 
-        pygame.draw.rect(screen, (0, 0, 0), (50, HEIGHT - 70, fuel_bar_width + 4, 36))
+        screen.blit(gas_icon, (40, HEIGHT - 120))
+        pygame.draw.rect(screen, (0, 0, 0), (100, HEIGHT - 110, fuel_bar_width + 4, 36))
         pygame.draw.rect(
             screen,
             (255, 50, 50),
-            (52, HEIGHT - 68, int((fuel / 100) * fuel_bar_width), 32),
+            (102, HEIGHT - 108, int((fuel / 100) * fuel_bar_width), 32),
         )
+
+        for ftext in floating_texts[:]:
+            alpha = int(255 * (ftext["timer"] / 1.5))
+            if alpha < 0:
+                alpha = 0
+            surf = collect_font.render(ftext["text"], True, ftext["color"])
+            surf.set_alpha(alpha)
+            screen.blit(surf, (ftext["x"] - cam_x, ftext["y"] - cam_y))
+            ftext["y"] -= 40 * dt  # float upward
+            ftext["timer"] -= dt
+            if ftext["timer"] <= 0:
+                floating_texts.remove(ftext)
 
         pygame.display.flip()
         clock.tick(60)
