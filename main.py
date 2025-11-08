@@ -1,4 +1,7 @@
 import pygame, pymunk, math, random, sys
+import json, os
+
+PLAYERS_FILE = "players.json"
 
 pygame.init()
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
@@ -78,6 +81,21 @@ def reset_game_state():
     smart_spawn_distance = 1000
     min_gas_distance = 2500
     flip_count = 0
+
+
+def load_players():
+    if os.path.exists(PLAYERS_FILE):
+        try:
+            with open(PLAYERS_FILE, "r") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+
+def save_players(players):
+    with open(PLAYERS_FILE, "w") as f:
+        json.dump(players, f, indent=2)
 
 
 # ===== PHYSICS =====
@@ -191,6 +209,9 @@ def spawn_gas_can(x_start):
 spawn_coin_group(next_coin_x)
 spawn_gas_can(2500)
 
+players = load_players()
+current_player = None
+
 
 # ===== CAR SELECTION MENU =====
 def car_selection_menu():
@@ -256,8 +277,11 @@ def car_selection_menu():
 
 # ===== MAIN MENU =====
 def main_menu():
+    global current_player, players  # so we can modify them
+
     menu_font = pygame.font.SysFont("Rajdhani", 256, True)
-    small_font = pygame.font.SysFont("Rajdhani", 64, True)
+    small_font = pygame.font.SysFont("Rajdhani", 48, True)
+    tiny_font = pygame.font.SysFont("Rajdhani", 32, True)
 
     title_text = menu_font.render("PYHILL", True, (255, 215, 0))
 
@@ -273,6 +297,9 @@ def main_menu():
         WIDTH // 2 - button_w // 2, HEIGHT // 2 + 120, button_w, button_h
     )
     exit_btn_rect = pygame.Rect(40, HEIGHT - 100, 220, 70)
+
+    # player UI top-right
+    player_box_rect = pygame.Rect(WIDTH - 460, 40, 400, 120)
 
     waiting = True
     while waiting:
@@ -291,14 +318,13 @@ def main_menu():
             if e.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if e.type == pygame.KEYDOWN:
-                if e.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    pygame.event.clear()
-                    waiting = False
+            if e.type == pygame.KEYDOWN and e.key in (pygame.K_RETURN, pygame.K_SPACE):
+                pygame.event.clear()
+                waiting = False
             if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
                 clicked = True
 
-        # function to draw a button
+        # reusable button drawer
         def draw_button(rect, text, color_idle, color_hover):
             hovered = rect.collidepoint(mx, my)
             color = color_hover if hovered else color_idle
@@ -314,9 +340,10 @@ def main_menu():
             )
             return hovered
 
-        # draw buttons
+        # draw menu buttons
         if draw_button(start_btn_rect, "START", (0, 220, 0), (0, 255, 0)) and clicked:
-            waiting = False
+            if current_player:
+                waiting = False
         if (
             draw_button(car_btn_rect, "SELECT CAR", (255, 230, 120), (255, 255, 180))
             and clicked
@@ -326,14 +353,111 @@ def main_menu():
             draw_button(score_btn_rect, "HIGH SCORES", (120, 180, 255), (160, 210, 255))
             and clicked
         ):
-            print("High scores screen placeholder!")  # can make later
-
+            print("High scores screen placeholder!")
         if (
             draw_button(exit_btn_rect, "EXIT", (180, 80, 80), (255, 100, 100))
             and clicked
         ):
             pygame.quit()
             sys.exit()
+
+        # ===== PLAYER BOX (top-right) =====
+        pygame.draw.rect(screen, (60, 60, 80), player_box_rect, border_radius=10)
+
+        if current_player:
+            player_text = tiny_font.render(
+                f"Player: {current_player}", True, (255, 255, 255)
+            )
+            screen.blit(player_text, (player_box_rect.x + 20, player_box_rect.y + 15))
+
+            stats = players[current_player]
+            stat_str = f"Coins: {stats['Coins']} | Flips: {stats['Flips']} | Dist: {stats['Max Distance']}"
+            stat_text = tiny_font.render(stat_str, True, (220, 220, 220))
+            screen.blit(stat_text, (player_box_rect.x + 20, player_box_rect.y + 70))
+
+            change_rect = pygame.Rect(
+                player_box_rect.right - 160, player_box_rect.y + 30, 140, 60
+            )
+            if (
+                draw_button(change_rect, "CHANGE", (200, 200, 100), (255, 255, 150))
+                and clicked
+            ):
+                current_player = None
+        else:
+            add_rect = pygame.Rect(
+                player_box_rect.x + 20, player_box_rect.y + 30, 360, 60
+            )
+            if (
+                draw_button(
+                    add_rect, "SELECT / CREATE PLAYER", (200, 200, 100), (255, 255, 150)
+                )
+                and clicked
+            ):
+                current_player = player_select_menu()
+
+        pygame.display.flip()
+        clock.tick(30)
+
+
+def player_select_menu():
+    global players
+    small_font = pygame.font.SysFont("Rajdhani", 40, True)
+    tiny_font = pygame.font.SysFont("Rajdhani", 28, True)
+    waiting = True
+    while waiting:
+        screen.fill((25, 25, 35))
+        title = small_font.render("SELECT PLAYER", True, (255, 215, 0))
+        screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 80))
+
+        mx, my = pygame.mouse.get_pos()
+        clicked = False
+
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                clicked = True
+            if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                return None
+
+        y = 200
+        for name in players.keys():
+            rect = pygame.Rect(WIDTH // 2 - 300, y, 600, 80)
+            hovered = rect.collidepoint(mx, my)
+            color = (120, 180, 255) if hovered else (100, 100, 140)
+            pygame.draw.rect(screen, color, rect, border_radius=12)
+            pygame.draw.rect(screen, (0, 0, 0), rect, 3, border_radius=12)
+            text = tiny_font.render(name, True, (0, 0, 0))
+            screen.blit(
+                text,
+                (
+                    rect.centerx - text.get_width() // 2,
+                    rect.centery - text.get_height() // 2,
+                ),
+            )
+            if hovered and clicked:
+                return name
+            y += 100
+
+        # add new player button
+        add_rect = pygame.Rect(WIDTH // 2 - 300, y + 40, 600, 80)
+        pygame.draw.rect(screen, (180, 220, 120), add_rect, border_radius=12)
+        pygame.draw.rect(screen, (0, 0, 0), add_rect, 3, border_radius=12)
+        text = tiny_font.render("CREATE NEW PLAYER", True, (0, 0, 0))
+        screen.blit(
+            text,
+            (
+                add_rect.centerx - text.get_width() // 2,
+                add_rect.centery - text.get_height() // 2,
+            ),
+        )
+        if add_rect.collidepoint(mx, my) and clicked:
+            new_name = input("Enter yer name, matey: ")
+            if new_name.strip():
+                players[new_name] = {"Max Distance": 0, "Coins": 0, "Flips": 0}
+                save_players(players)
+                return new_name
 
         pygame.display.flip()
         clock.tick(30)
