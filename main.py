@@ -12,9 +12,9 @@ WIDTH, HEIGHT = screen.get_size()
 clock = pygame.time.Clock()
 pygame.display.set_caption("Pyhill")
 coin_icon = pygame.image.load("coin_icon.png").convert_alpha()
-coin_icon = pygame.transform.rotozoom(coin_icon, 0, 2)
 gas_icon = pygame.image.load("gas_icon.png").convert_alpha()
-gas_icon = pygame.transform.rotozoom(gas_icon, 0, 3)
+gas_icon_ui = pygame.transform.rotozoom(gas_icon, 0, 0.8)
+
 
 COIN_TYPES = [
     {"value": 5, "icon": "coin_5.png"},
@@ -26,7 +26,8 @@ COIN_TYPES = [
 
 # load and scale once
 for ctype in COIN_TYPES:
-    ctype["image"] = pygame.image.load(ctype["icon"]).convert_alpha()
+    img = pygame.image.load(ctype["icon"]).convert_alpha()
+    ctype["image"] = pygame.transform.rotozoom(img, 0, 1.5)
 
 
 def reset_game_state():
@@ -209,12 +210,11 @@ flip_count = 0
 
 def spawn_coin_group(x_start):
     group_size = random.randint(2, 6)
-    gap = 45
+    gap = 80
     for i in range(group_size):
         x = x_start + i * gap
-        y = track_y(x) - 90
+        y = track_y(x) - 60
 
-        # pick a random coin type (weighted for rarity)
         coin_type = random.choices(
             COIN_TYPES,
             weights=[60, 25, 10, 4, 1],  # bronze common, diamond rare
@@ -854,6 +854,9 @@ def game_loop():
     car_img, car_body, car_shape, car_w, car_h = create_car(selected_car_img)
     floating_texts = []
 
+    coin_font = pygame.font.SysFont("Rajdhani", 48, True)
+    dist_font = pygame.font.SysFont("Rajdhani", 64, True)
+
     running = True
     while running:
         dt = 1 / 60
@@ -885,7 +888,7 @@ def game_loop():
             if 170 < angle_deg < 190 and angular_speed < 1:
                 engine_disabled = True
             # check if mostly upside down (170–190°)
-            if 170 < angle_deg < 190 and vel_mag < 50 and angular_speed < 1:
+            if 170 < angle_deg < 190 and vel_mag < 70 and angular_speed < 1:
                 if upside_down_start is None:
                     upside_down_start = game_time
                 elif game_time - upside_down_start > 5:
@@ -1027,7 +1030,7 @@ def game_loop():
 
         # CAMERA
         target_cam_x = int(car_body.position.x - WIDTH // 2)
-        target_cam_y = int(car_body.position.y - HEIGHT // 2)
+        target_cam_y = int((car_body.position.y - HEIGHT // 2) - 100)
         global cam_x, cam_y
         cam_x += (target_cam_x - cam_x) * cam_smooth
         cam_y += (target_cam_y - cam_y) * cam_smooth
@@ -1081,25 +1084,23 @@ def game_loop():
         distance_traveled += vx / PPM * dt
         speed_mps = vx / PPM
         speed_kmh = speed_mps * 3.6
-        dist_text = font.render(
-            f"Distance: {int(distance_traveled)} m", True, (0, 0, 0)
-        )
-        speed_text = font.render(f"Speed: {int(speed_kmh)} km/h", True, (0, 0, 0))
-        fps_text = font.render(f"FPS: {int(clock.get_fps())}", True, (0, 0, 0))
-        coin_text = font.render(f"{coin_score}", True, (255, 215, 0))
+        dist_text = dist_font.render(f"{int(distance_traveled)} m", True, (0, 0, 0))
+        speed_text = font.render(f"{int(speed_kmh)} km/h", True, (0, 0, 0))
+        fps_text = font.render(f"FPS: {int(clock.get_fps())}", True, (0, 255, 0))
+        coin_text = coin_font.render(f"{coin_score}", True, (255, 215, 0))
 
-        screen.blit(dist_text, (WIDTH - 250, 10))
-        screen.blit(speed_text, (WIDTH - 250, 35))
-        screen.blit(coin_icon, (WIDTH - 310, 60))
-        screen.blit(coin_text, (WIDTH - 250, 65))
-        screen.blit(fps_text, (10, 10))
+        screen.blit(dist_text, ((WIDTH / 2) - (dist_text.get_width() / 2), 40))
+        screen.blit(speed_text, ((WIDTH / 2) - (speed_text.get_width() / 2), 104))
+        screen.blit(coin_icon, (20, 20))
+        screen.blit(coin_text, (88, 24))
+        screen.blit(fps_text, (WIDTH - 150, 10))
 
-        screen.blit(gas_icon, (40, HEIGHT - 120))
-        pygame.draw.rect(screen, (0, 0, 0), (100, HEIGHT - 110, fuel_bar_width + 4, 36))
+        screen.blit(gas_icon_ui, (34, 110))
+        pygame.draw.rect(screen, (0, 0, 0), (94, 120, fuel_bar_width + 4, 36))
         pygame.draw.rect(
             screen,
             (255, 50, 50),
-            (102, HEIGHT - 108, int((fuel / 100) * fuel_bar_width), 32),
+            (96, 122, int((fuel / 100) * fuel_bar_width), 32),
         )
 
         for ftext in floating_texts[:]:
