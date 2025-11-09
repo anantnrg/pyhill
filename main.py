@@ -14,7 +14,19 @@ pygame.display.set_caption("Pyhill")
 coin_icon = pygame.image.load("coin_icon.png").convert_alpha()
 coin_icon = pygame.transform.rotozoom(coin_icon, 0, 2)
 gas_icon = pygame.image.load("gas_icon.png").convert_alpha()
-gas_icon = pygame.transform.rotozoom(gas_icon, 0, 4)
+gas_icon = pygame.transform.rotozoom(gas_icon, 0, 3)
+
+COIN_TYPES = [
+    {"value": 5, "icon": "coin_5.png"},
+    {"value": 25, "icon": "coin_25.png"},
+    {"value": 50, "icon": "coin_50.png"},
+    {"value": 100, "icon": "coin_100.png"},
+    {"value": 500, "icon": "coin_500.png"},
+]
+
+# load and scale once
+for ctype in COIN_TYPES:
+    ctype["image"] = pygame.image.load(ctype["icon"]).convert_alpha()
 
 
 def reset_game_state():
@@ -201,7 +213,23 @@ def spawn_coin_group(x_start):
     for i in range(group_size):
         x = x_start + i * gap
         y = track_y(x) - 90
-        coins.append({"x": x, "y": y, "collected": False})
+
+        # pick a random coin type (weighted for rarity)
+        coin_type = random.choices(
+            COIN_TYPES,
+            weights=[60, 25, 10, 4, 1],  # bronze common, diamond rare
+            k=1,
+        )[0]
+
+        coins.append(
+            {
+                "x": x,
+                "y": y,
+                "collected": False,
+                "value": coin_type["value"],
+                "image": coin_type["image"],
+            }
+        )
 
 
 def spawn_gas_can(x_start):
@@ -280,7 +308,7 @@ def car_selection_menu():
 
 # ===== MAIN MENU =====
 def main_menu():
-    global current_player, players  # so we can modify them
+    global current_player, players
 
     menu_font = pygame.font.SysFont("Rajdhani", 256, True)
     small_font = pygame.font.SysFont("Rajdhani", 48, True)
@@ -288,7 +316,6 @@ def main_menu():
 
     title_text = menu_font.render("PYHILL", True, (255, 215, 0))
 
-    # button setup
     button_w, button_h = 420, 120
     start_btn_rect = pygame.Rect(
         WIDTH - button_w - 60, HEIGHT - button_h - 60, button_w, button_h
@@ -301,15 +328,12 @@ def main_menu():
     )
     exit_btn_rect = pygame.Rect(40, HEIGHT - 100, 220, 70)
 
-    # player UI top-right
-    player_box_rect = pygame.Rect(WIDTH - 560, 40, 520, 120)
-
     waiting = True
     while waiting:
         screen.fill((20, 20, 30))
         wave = math.sin(pygame.time.get_ticks() * 0.002) * 30
 
-        # title
+        # Title
         screen.blit(
             title_text, (WIDTH // 2 - title_text.get_width() // 2, HEIGHT // 8 + wave)
         )
@@ -327,7 +351,7 @@ def main_menu():
             if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
                 clicked = True
 
-        # reusable button drawer
+        # Button drawing helper
         def draw_button(rect, text, color_idle, color_hover, font):
             hovered = rect.collidepoint(mx, my)
             color = color_hover if hovered else color_idle
@@ -343,7 +367,7 @@ def main_menu():
             )
             return hovered
 
-        # draw menu buttons
+        # ===== Buttons =====
         if (
             draw_button(start_btn_rect, "START", (0, 220, 0), (0, 255, 0), small_font)
             and clicked
@@ -377,22 +401,39 @@ def main_menu():
             pygame.quit()
             sys.exit()
 
-        # ===== PLAYER BOX (top-right) =====
-        pygame.draw.rect(screen, (60, 60, 80), player_box_rect, border_radius=10)
-
+        # ===== PLAYER BOX =====
         if current_player:
-            player_text = tiny_font.render(
-                f"Player: {current_player}", True, (255, 255, 255)
+            # Tall box
+            player_box_rect = pygame.Rect(WIDTH - 360, 40, 320, 290)
+            pygame.draw.rect(screen, (60, 60, 80), player_box_rect, border_radius=12)
+
+            # Texts stacked vertically
+            name_text = tiny_font.render(
+                f"Player: {current_player}", True, (255, 230, 120)
             )
-            screen.blit(player_text, (player_box_rect.x + 20, player_box_rect.y + 15))
-
             stats = players[current_player]
-            stat_str = f"Coins: {stats['Coins']} | Flips: {stats['Flips']} | Dist: {stats['Max Distance']}"
-            stat_text = tiny_font.render(stat_str, True, (220, 220, 220))
-            screen.blit(stat_text, (player_box_rect.x + 20, player_box_rect.y + 70))
+            coins_text = tiny_font.render(
+                f"Coins: {stats['Coins']}", True, (220, 220, 220)
+            )
+            flips_text = tiny_font.render(
+                f"Flips: {stats['Flips']}", True, (220, 220, 220)
+            )
+            dist_text = tiny_font.render(
+                f"Dist: {stats['Max Distance']}", True, (220, 220, 220)
+            )
 
+            # Vertical layout
+            spacing = 45
+            x = player_box_rect.x + 20
+            y = player_box_rect.y + 20
+            screen.blit(name_text, (x, y))
+            screen.blit(coins_text, (x, y + spacing))
+            screen.blit(flips_text, (x, y + spacing * 2))
+            screen.blit(dist_text, (x, y + spacing * 3))
+
+            # Change button below stats
             change_rect = pygame.Rect(
-                player_box_rect.right - 160, player_box_rect.y + 10, 140, 60
+                x, y + spacing * 4 + 10, player_box_rect.width - 40, 60
             )
             if (
                 draw_button(
@@ -401,9 +442,13 @@ def main_menu():
                 and clicked
             ):
                 current_player = None
+
         else:
+            # Wide box when no player selected
+            player_box_rect = pygame.Rect(WIDTH - 460, 20, 440, 80)
+
             add_rect = pygame.Rect(
-                player_box_rect.x + 20, player_box_rect.y + 10, 480, 100
+                player_box_rect.x + 10, player_box_rect.y + 10, 420, 60
             )
             if (
                 draw_button(
@@ -954,7 +999,17 @@ def game_loop():
                             "color": (0, 0, 0),
                         }
                     )
-                    coin_score += 1
+                    coin_score += coin["value"]
+                    floating_texts.append(
+                        {
+                            "text": f"+{coin['value']}",
+                            "x": coin["x"],
+                            "y": coin["y"] - 40,
+                            "timer": 1.0,
+                            "color": (0, 0, 0),
+                        }
+                    )
+
         coins[:] = [c for c in coins if c["x"] > car_body.position.x - buffer_behind]
 
         # GAS COLLECTION
@@ -1005,35 +1060,17 @@ def game_loop():
 
         for coin in coins:
             if not coin["collected"]:
-                pygame.draw.circle(
-                    screen,
-                    (255, 215, 0),
-                    (int(coin["x"] - cam_x), int(coin["y"] - cam_y)),
-                    coin_radius,
+                icon_rect = coin["image"].get_rect(
+                    center=(int(coin["x"] - cam_x), int(coin["y"] - cam_y))
                 )
+                screen.blit(coin["image"], icon_rect)
 
         for gas in gas_cans:
             if not gas["collected"]:
-                pygame.draw.rect(
-                    screen,
-                    (255, 50, 50),
-                    (
-                        int(gas["x"] - cam_x - gas_radius),
-                        int(gas["y"] - cam_y - gas_radius),
-                        gas_radius * 2,
-                        gas_radius * 2,
-                    ),
+                icon_rect = gas_icon.get_rect(
+                    center=(int(gas["x"] - cam_x), int(gas["y"] - cam_y))
                 )
-                pygame.draw.rect(
-                    screen,
-                    (200, 200, 200),
-                    (
-                        int(gas["x"] - cam_x - 5),
-                        int(gas["y"] - cam_y - gas_radius - 10),
-                        10,
-                        10,
-                    ),
-                )
+                screen.blit(gas_icon, icon_rect)
 
         rotated = pygame.transform.rotate(car_img, -math.degrees(car_body.angle))
         rect = rotated.get_rect(
