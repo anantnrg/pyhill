@@ -2,26 +2,23 @@ import pygame, pymunk, math, random, sys
 import json, os
 from datetime import datetime
 
-
 PLAYERS_FILE = os.path.join(os.path.expanduser("~"), "pyhill_players.json")
-
 
 pygame.init()
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 WIDTH, HEIGHT = screen.get_size()
 clock = pygame.time.Clock()
 pygame.display.set_caption("Pyhill")
-coin_icon = pygame.image.load("coin_icon.png").convert_alpha()
-gas_icon = pygame.image.load("gas_icon.png").convert_alpha()
+coin_icon = pygame.image.load("assets/coin_icon.png").convert_alpha()
+gas_icon = pygame.image.load("assets/gas_icon.png").convert_alpha()
 gas_icon_ui = pygame.transform.rotozoom(gas_icon, 0, 0.8)
 
-
 COIN_TYPES = [
-    {"value": 5, "icon": "coin_5.png"},
-    {"value": 25, "icon": "coin_25.png"},
-    {"value": 50, "icon": "coin_50.png"},
-    {"value": 100, "icon": "coin_100.png"},
-    {"value": 500, "icon": "coin_500.png"},
+    {"value": 5, "icon": "assets/coin_5.png"},
+    {"value": 25, "icon": "assets/coin_25.png"},
+    {"value": 50, "icon": "assets/coin_50.png"},
+    {"value": 100, "icon": "assets/coin_100.png"},
+    {"value": 500, "icon": "assets/coin_500.png"},
 ]
 
 # load and scale once
@@ -119,13 +116,13 @@ space = pymunk.Space()
 space.gravity = (0, 500)
 
 # ===== LOAD CARS =====
-car_files = ["car1.png", "car2.png", "car3.png"]
+car_files = ["assets/car1.png", "assets/car2.png", "assets/car3.png"]
 car_images = [pygame.image.load(f).convert_alpha() for f in car_files]
 selected_car_index = 0  # which car player picked
 
 # ===== TEXTURES =====
-dirt_tex = pygame.image.load("dirt_tile.png").convert()
-grass_tex = pygame.image.load("grass_top.png").convert_alpha()
+dirt_tex = pygame.image.load("assets/dirt_tile.png").convert()
+grass_tex = pygame.image.load("assets/grass_top.png").convert_alpha()
 
 
 # ===== FUNCTIONS =====
@@ -384,14 +381,14 @@ def main_menu():
         if (
             draw_button(
                 score_btn_rect,
-                "HIGH SCORES",
+                "LEADERBOARDS",
                 (120, 180, 255),
                 (160, 210, 255),
                 small_font,
             )
             and clicked
         ):
-            leaderboard()
+            LEADERBOARDS()
         if (
             draw_button(
                 exit_btn_rect, "EXIT", (180, 80, 80), (255, 100, 100), small_font
@@ -607,7 +604,7 @@ def update_player_stats(player_name, distance, coins, flips):
     save_players(players)
 
 
-def leaderboard():
+def LEADERBOARDS():
     global players
     small_font = pygame.font.SysFont("Rajdhani", 56, True)
     tiny_font = pygame.font.SysFont("Rajdhani", 28, True)
@@ -630,7 +627,7 @@ def leaderboard():
 
     while waiting:
         screen.fill((25, 25, 35))
-        title = small_font.render("HIGH SCORES", True, (255, 215, 0))
+        title = small_font.render("LEADERBOARDS", True, (255, 215, 0))
         screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 40))
 
         # per-player bests (left)
