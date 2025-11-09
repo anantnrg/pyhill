@@ -302,7 +302,7 @@ def main_menu():
     exit_btn_rect = pygame.Rect(40, HEIGHT - 100, 220, 70)
 
     # player UI top-right
-    player_box_rect = pygame.Rect(WIDTH - 460, 40, 400, 120)
+    player_box_rect = pygame.Rect(WIDTH - 560, 40, 520, 120)
 
     waiting = True
     while waiting:
@@ -403,7 +403,7 @@ def main_menu():
                 current_player = None
         else:
             add_rect = pygame.Rect(
-                player_box_rect.x + 20, player_box_rect.y + 30, 360, 60
+                player_box_rect.x + 20, player_box_rect.y + 10, 480, 100
             )
             if (
                 draw_button(
@@ -569,7 +569,6 @@ def leaderboard():
     waiting = True
     scroll = 0
 
-    # build global runs list once per open
     def collect_runs():
         runs = []
         for name, stats in players.items():
@@ -580,48 +579,87 @@ def leaderboard():
 
     runs = collect_runs()
 
+    # column widths (adjusted to give better spacing)
+    col_widths_left = [160, 130, 100, 100]
+    col_widths_right = [150, 100, 80, 80, 220]  # added wider for date/time
+
     while waiting:
         screen.fill((25, 25, 35))
         title = small_font.render("HIGH SCORES", True, (255, 215, 0))
         screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 40))
 
-        # left: per-player bests
+        # per-player bests (left)
         left_x = WIDTH // 4
-        y = 120
-        header = tiny_font.render(
-            "PLAYER  | MAX DIST | COINS | FLIPS", True, (200, 200, 200)
-        )
-        screen.blit(header, (left_x - header.get_width() // 2, y))
-        y += 40
+        y = 140
+        header_texts = ["PLAYER", "MAX DIST", "COINS", "FLIPS"]
+        header_x = left_x - sum(col_widths_left) // 2
+
+        for i, text in enumerate(header_texts):
+            hdr = tiny_font.render(text, True, (255, 200, 100))
+            screen.blit(hdr, (header_x + sum(col_widths_left[:i]) + 10, y))
+        y += 50
+
         sorted_players = sorted(
             players.items(), key=lambda p: p[1].get("Max Distance", 0), reverse=True
         )
-        for name, st in sorted_players[:12]:
-            line = tiny_font.render(
-                f"{name:<12}  {st.get('Max Distance', 0):>6}m    {st.get('Coins', 0):>4}    {st.get('Flips', 0):>4}",
-                True,
-                (255, 255, 255),
+        for name, st in sorted_players[:10]:
+            row_rect = pygame.Rect(
+                left_x - sum(col_widths_left) // 2 - 20,
+                y - 6,
+                sum(col_widths_left) + 40,
+                38,
             )
-            screen.blit(line, (left_x - line.get_width() // 2, y))
-            y += 32
+            pygame.draw.rect(screen, (40, 40, 60), row_rect, border_radius=6)
+            pygame.draw.rect(screen, (60, 60, 90), row_rect, 2, border_radius=6)
 
-        # right: global top runs (scrollable)
+            values = [
+                name,
+                f"{st.get('Max Distance', 0)}m",
+                str(st.get("Coins", 0)),
+                str(st.get("Flips", 0)),
+            ]
+            for i, val in enumerate(values):
+                txt = tiny_font.render(val, True, (255, 255, 255))
+                txt_y = row_rect.centery - txt.get_height() // 2  # centered vertically
+                screen.blit(txt, (header_x + sum(col_widths_left[:i]) + 10, txt_y))
+            y += 46  # extra spacing
+
+        # global top runs (right)
         right_x = WIDTH * 3 // 4
-        y2 = 120
-        header2 = tiny_font.render("TOP RUNS (by distance)", True, (200, 200, 200))
-        screen.blit(header2, (right_x - header2.get_width() // 2, y2))
-        y2 += 40
-        start_index = scroll // 40
-        for run in runs[start_index : start_index + 12]:
-            txt = tiny_font.render(
-                f"{run['player']:<10} {run['distance']:>5}m  {run['coins']:>3}c  {run['flips']:>2}f  {run['time']}",
-                True,
-                (255, 255, 255),
-            )
-            screen.blit(txt, (right_x - txt.get_width() // 2, y2))
-            y2 += 32
+        y2 = 140
+        header2_texts = ["PLAYER", "DIST", "COINS", "FLIPS", "DATE/TIME"]
+        header2_x = right_x - sum(col_widths_right) // 2
 
-        # back button
+        for i, text in enumerate(header2_texts):
+            hdr = tiny_font.render(text, True, (255, 200, 100))
+            screen.blit(hdr, (header2_x + sum(col_widths_right[:i]) + 10, y2))
+        y2 += 50
+
+        start_index = scroll // 46
+        for run in runs[start_index : start_index + 10]:
+            row_rect = pygame.Rect(
+                right_x - sum(col_widths_right) // 2 - 20,
+                y2 - 6,
+                sum(col_widths_right) + 40,
+                38,
+            )
+            pygame.draw.rect(screen, (40, 40, 60), row_rect, border_radius=6)
+            pygame.draw.rect(screen, (60, 60, 90), row_rect, 2, border_radius=6)
+
+            values = [
+                run["player"],
+                f"{run['distance']}m",
+                str(run["coins"]),
+                str(run["flips"]),
+                run["time"][:19],  # shorten timestamp if too long
+            ]
+            for i, val in enumerate(values):
+                txt = tiny_font.render(val, True, (255, 255, 255))
+                txt_y = row_rect.centery - txt.get_height() // 2
+                screen.blit(txt, (header2_x + sum(col_widths_right[:i]) + 10, txt_y))
+            y2 += 46
+
+        # BACK BUTTON
         back_rect = pygame.Rect(WIDTH // 2 - 120, HEIGHT - 100, 240, 64)
         pygame.draw.rect(screen, (220, 120, 120), back_rect, border_radius=12)
         pygame.draw.rect(screen, (0, 0, 0), back_rect, 3, border_radius=12)
@@ -634,6 +672,7 @@ def leaderboard():
             ),
         )
 
+        # input handling
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
                 pygame.quit()
@@ -641,13 +680,13 @@ def leaderboard():
             if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
                 waiting = False
             if e.type == pygame.MOUSEBUTTONDOWN:
-                if e.button == 1:
-                    if back_rect.collidepoint(e.pos):
-                        waiting = False
-                elif e.button == 4:  # wheel up
-                    scroll = max(0, scroll - 40)
-                elif e.button == 5:  # wheel down
-                    scroll += 40
+                if e.button == 1 and back_rect.collidepoint(e.pos):
+                    waiting = False
+                elif e.button == 4:
+                    scroll = max(0, scroll - 46)
+                elif e.button == 5:
+                    scroll += 46
+
         pygame.display.flip()
         clock.tick(30)
 
