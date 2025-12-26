@@ -1,17 +1,28 @@
-import pygame, pymunk, math, random, sys
-import json, os
+import json
+import math
+import os
+import random
+import sys
 from datetime import datetime
+
+import pygame
+import pymunk
 
 PLAYERS_FILE = os.path.join(os.path.expanduser("~"), "pyhill_players.json")
 
 pygame.init()
-screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+screen = pygame.display.set_mode((1366, 768))
 WIDTH, HEIGHT = screen.get_size()
 clock = pygame.time.Clock()
 pygame.display.set_caption("Pyhill")
 coin_icon = pygame.image.load("assets/coin_icon.png").convert_alpha()
 gas_icon = pygame.image.load("assets/gas_icon.png").convert_alpha()
 gas_icon_ui = pygame.transform.rotozoom(gas_icon, 0, 0.8)
+cloud_files = ["assets/cloud1.png", "assets/cloud2.png", "assets/cloud3.png"]
+cloud_images = [pygame.image.load(f).convert_alpha() for f in cloud_files]
+
+LEMONMILK_REG = "assets/LEMONMILK-Regular.otf"
+LEMONMILK_BOLD = "assets/LEMONMILK-Bold.otf"
 
 COIN_TYPES = [
     {"value": 5, "icon": "assets/coin_5.png"},
@@ -38,6 +49,7 @@ def reset_game_state():
         min_gas_distance, \
         smart_spawn_distance, \
         flip_count
+    global clouds
 
     # ===== PHYSICS =====
     space = pymunk.Space()
@@ -95,6 +107,20 @@ def reset_game_state():
     min_gas_distance = 2500
     flip_count = 0
 
+    # spawn clouds
+    clouds = []
+    for i in range(8):  # more clouds = better spread
+        img = random.choice(cloud_images)
+        scale = random.uniform(0.25, 0.6)  # smaller clouds
+        cloud_img_scaled = pygame.transform.rotozoom(img, 0, scale)
+
+        # spread clouds far across the sky
+        x = random.randint(0, WIDTH * 4)
+        y = random.randint(40, 260)
+
+        speed = random.uniform(0.1, 0.35)  # slower = more natural
+        clouds.append({"x": x, "y": y, "speed": speed, "img": cloud_img_scaled})
+
 
 def load_players():
     if os.path.exists(PLAYERS_FILE):
@@ -116,7 +142,7 @@ space = pymunk.Space()
 space.gravity = (0, 500)
 
 # ===== LOAD CARS =====
-car_files = ["assets/car1.png", "assets/car2.png", "assets/car3.png"]
+car_files = ["assets/car1.png", "assets/car2.png", "assets/car3.png", "assets/car4.png"]
 car_images = [pygame.image.load(f).convert_alpha() for f in car_files]
 selected_car_index = 0  # which car player picked
 
@@ -182,8 +208,8 @@ gas_refill_amount = 100
 game_time = 0
 last_spawn_x = 0
 
-font = pygame.font.SysFont("Rajdhani", 36, True)
-collect_font = pygame.font.SysFont("Rajdhani", 64, True)
+font = pygame.font.Font(LEMONMILK_BOLD, 24)
+collect_font = pygame.font.Font(LEMONMILK_BOLD, 42)
 flip_timer = 0
 speed_limit = 12000
 accel_force = 11000
@@ -203,6 +229,7 @@ min_gas_distance = 2500
 upside_down_start = None
 engine_disabled = False
 flip_count = 0
+clouds = []
 
 
 def spawn_coin_group(x_start):
@@ -244,8 +271,8 @@ current_player = None
 # ===== CAR SELECTION MENU =====
 def car_selection_menu():
     global selected_car_index
-    menu_font = pygame.font.SysFont(None, 80)
-    small_font = pygame.font.SysFont(None, 36)
+    menu_font = pygame.font.Font(LEMONMILK_BOLD, 48)
+    small_font = pygame.font.Font(LEMONMILK_BOLD, 24)
     title_text = menu_font.render("SELECT YOUR RIDE", True, (255, 215, 0))
 
     waiting = True
@@ -264,7 +291,7 @@ def car_selection_menu():
                     selected_car_index = (selected_car_index - 1) % len(car_images)
                 elif e.key == pygame.K_RIGHT:
                     selected_car_index = (selected_car_index + 1) % len(car_images)
-                elif e.key == pygame.K_SPACE:
+                elif e.key == pygame.K_RETURN:
                     waiting = False
             if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
                 mx, my = e.pos
@@ -295,7 +322,7 @@ def car_selection_menu():
             screen.blit(car_display, rect)
 
         hint_text = small_font.render(
-            "← → to select  |  SPACE to confirm", True, (220, 220, 220)
+            "← → to select  |  ENTER to confirm", True, (220, 220, 220)
         )
         screen.blit(hint_text, (WIDTH // 2 - hint_text.get_width() // 2, HEIGHT - 100))
 
@@ -307,18 +334,18 @@ def car_selection_menu():
 def main_menu():
     global current_player, players
 
-    menu_font = pygame.font.SysFont("Rajdhani", 256, True)
-    small_font = pygame.font.SysFont("Rajdhani", 48, True)
-    tiny_font = pygame.font.SysFont("Rajdhani", 32, True)
+    menu_font = pygame.font.Font(LEMONMILK_BOLD, 180)
+    small_font = pygame.font.Font(LEMONMILK_BOLD, 32)
+    tiny_font = pygame.font.Font(LEMONMILK_BOLD, 24)
 
     title_text = menu_font.render("PYHILL", True, (255, 215, 0))
 
-    button_w, button_h = 420, 120
+    button_w, button_h = 320, 90
     start_btn_rect = pygame.Rect(
         WIDTH - button_w - 60, HEIGHT - button_h - 60, button_w, button_h
     )
     car_btn_rect = pygame.Rect(
-        WIDTH // 2 - button_w // 2, HEIGHT // 2 - 40, button_w, button_h
+        WIDTH // 2 - button_w // 2, HEIGHT // 2, button_w, button_h
     )
     score_btn_rect = pygame.Rect(
         WIDTH // 2 - button_w // 2, HEIGHT // 2 + 120, button_w, button_h
@@ -465,8 +492,8 @@ def main_menu():
 
 def player_select_menu():
     global players
-    small_font = pygame.font.SysFont("Rajdhani", 56, True)
-    tiny_font = pygame.font.SysFont("Rajdhani", 32, True)
+    small_font = pygame.font.Font(LEMONMILK_BOLD, 56)
+    tiny_font = pygame.font.Font(LEMONMILK_BOLD, 32)
 
     waiting = True
     typing_name = False
@@ -606,8 +633,8 @@ def update_player_stats(player_name, distance, coins, flips):
 
 def LEADERBOARDS():
     global players
-    small_font = pygame.font.SysFont("Rajdhani", 56, True)
-    tiny_font = pygame.font.SysFont("Rajdhani", 28, True)
+    small_font = pygame.font.Font(LEMONMILK_BOLD, 48)
+    tiny_font = pygame.font.Font(LEMONMILK_REG, 22)
     waiting = True
     scroll = 0
 
@@ -734,8 +761,14 @@ def LEADERBOARDS():
 
 
 def confirm_exit_menu():
-    small_font = pygame.font.SysFont("Rajdhani", 64, True)
-    button_font = pygame.font.SysFont("Rajdhani", 48, True)
+    small_font = pygame.font.Font(
+        LEMONMILK_BOLD,
+        64,
+    )
+    button_font = pygame.font.Font(
+        LEMONMILK_BOLD,
+        48,
+    )
 
     yes_rect = pygame.Rect(WIDTH // 2 - 220, HEIGHT // 2, 180, 80)
     no_rect = pygame.Rect(WIDTH // 2 + 40, HEIGHT // 2, 180, 80)
@@ -785,8 +818,8 @@ def show_game_over(reason_text):
     if current_player:
         update_player_stats(current_player, distance_traveled, coin_score, flip_count)
 
-    small_font = pygame.font.SysFont("Rajdhani", 64, True)
-    button_font = pygame.font.SysFont("Rajdhani", 48, True)
+    small_font = pygame.font.Font(LEMONMILK_BOLD, 64)
+    button_font = pygame.font.Font(LEMONMILK_BOLD, 48)
     btn_rect = pygame.Rect(WIDTH - 300, HEIGHT - 120, 260, 80)
 
     waiting = True
@@ -846,13 +879,20 @@ def game_loop():
         engine_disabled, \
         upside_down_start, \
         flip_count
+    global cam_x, cam_y
 
     selected_car_img = car_images[selected_car_index]
     car_img, car_body, car_shape, car_w, car_h = create_car(selected_car_img)
     floating_texts = []
 
-    coin_font = pygame.font.SysFont("Rajdhani", 48, True)
-    dist_font = pygame.font.SysFont("Rajdhani", 64, True)
+    coin_font = pygame.font.Font(
+        LEMONMILK_BOLD,
+        32,
+    )
+    dist_font = pygame.font.Font(
+        LEMONMILK_BOLD,
+        48,
+    )
 
     running = True
     while running:
@@ -1012,6 +1052,19 @@ def game_loop():
 
         coins[:] = [c for c in coins if c["x"] > car_body.position.x - buffer_behind]
 
+        # update clouds
+        # update clouds
+        for cloud in clouds:
+            cloud["x"] -= cloud["speed"]
+
+            # check offscreen using parallax offset
+            if cloud["x"] - cam_x * 0.3 < -cloud["img"].get_width():
+                cloud["x"] = cam_x + WIDTH + random.randint(200, 600)
+                cloud["y"] = random.randint(40, 260)
+                cloud["img"] = pygame.transform.rotozoom(
+                    random.choice(cloud_images), 0, random.uniform(0.25, 0.6)
+                )
+
         # GAS COLLECTION
         for gas in gas_cans:
             if not gas["collected"]:
@@ -1028,12 +1081,16 @@ def game_loop():
         # CAMERA
         target_cam_x = int(car_body.position.x - WIDTH // 2)
         target_cam_y = int((car_body.position.y - HEIGHT // 2) - 100)
-        global cam_x, cam_y
         cam_x += (target_cam_x - cam_x) * cam_smooth
         cam_y += (target_cam_y - cam_y) * cam_smooth
 
         # DRAW
         screen.fill((135, 206, 235))
+
+        # draw clouds
+        # draw clouds (parallax)
+        for cloud in clouds:
+            screen.blit(cloud["img"], (cloud["x"] - cam_x * 0.3, cloud["y"]))
 
         for i in range(len(track_pts) - 1):
             x1, y1 = track_pts[i]
