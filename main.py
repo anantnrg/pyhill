@@ -334,7 +334,7 @@ def car_selection_menu():
 def main_menu():
     global current_player, players
 
-    menu_font = pygame.font.Font(LEMONMILK_BOLD, 180)
+    menu_font = pygame.font.Font(LEMONMILK_BOLD, 164)
     small_font = pygame.font.Font(LEMONMILK_BOLD, 32)
     tiny_font = pygame.font.Font(LEMONMILK_BOLD, 24)
 
@@ -818,8 +818,8 @@ def show_game_over(reason_text):
     if current_player:
         update_player_stats(current_player, distance_traveled, coin_score, flip_count)
 
-    small_font = pygame.font.Font(LEMONMILK_BOLD, 64)
-    button_font = pygame.font.Font(LEMONMILK_BOLD, 48)
+    small_font = pygame.font.Font(LEMONMILK_BOLD, 38)
+    button_font = pygame.font.Font(LEMONMILK_BOLD, 32)
     btn_rect = pygame.Rect(WIDTH - 300, HEIGHT - 120, 260, 80)
 
     waiting = True
