@@ -11,7 +11,7 @@ import pymunk
 PLAYERS_FILE = os.path.join(os.path.expanduser("~"), "pyhill_players.json")
 
 pygame.init()
-screen = pygame.display.set_mode((1366, 768))
+screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 WIDTH, HEIGHT = screen.get_size()
 clock = pygame.time.Clock()
 pygame.display.set_caption("Pyhill")
